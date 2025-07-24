@@ -3,432 +3,400 @@
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-1.9%2B-red.svg)](https://pytorch.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.28%2B-orange.svg)](https://streamlit.io/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 > **Projet réalisé dans le cadre de mon stage de M1 Informatique Parcours Intelligence Artificielle**  
-> **Laboratoire CReSTIC - Lab-i*** - Université de Reims Champagne-Ardennes  
-> **Période :** Juillet 2025
+> **Laboratoire Lab-i*** - Université de Reims Champagne-Ardennes  
+> **Période :** Avril --> Juillet 2025
 
-## 📋 Table des Matières
+Ce projet développé dans le cadre d'un stage de M1 Informatique Parcours Intelligence Artificielle à l'Université de Reims Champagne-Ardenne (Lab-i*) propose une solution complète pour la prédiction de flux de véhicules utilisant des modèles LSTM. Il inclut l'optimisation d'hyperparamètres, l'entraînement de modèles et l'analyse de similarité entre capteurs.
 
-- [À Propos](#-à-propos)
-- [Fonctionnalités](#-fonctionnalités)
-- [Installation](#-installation)
-- [Structure du Projet](#-structure-du-projet)
-- [Guide d'Utilisation](#-guide-dutilisation)
-- [Exemples Détaillés](#-exemples-détaillés)
-- [Architecture LSTM](#-architecture-lstm)
-- [Datasets](#-datasets)
-- [Remerciements](#-remerciements)
-- [Licence](#-licence)
+## 📋 Table des matières
 
-## 🎯 À Propos
+- [Aperçu](#aperçu)
+- [Installation](#installation)
+- [Structure du projet](#structure-du-projet)
+- [Utilisation](#utilisation)
+  - [Launcher principal](#launcher-principal-mainpy)
+  - [Optimisation d'hyperparamètres](#optimisation-dhyperparamètres-tuning_lstmpy)
+  - [Entraînement et évaluation](#entraînement-et-évaluation-lstmpy)
+  - [Analyse de similarité](#analyse-de-similarité-analyse_similarite_lstmpy)
+- [Format des données](#format-des-données)
+- [Exemples d'utilisation](#exemples-dutilisation)
+- [Visualisations](#visualisations)
+- [Remerciements](#remerciements)
 
-Ce projet développe une solution complète de **prédiction de flux de véhicules** utilisant des modèles **LSTM (Long Short-Term Memory)** pour analyser et prévoir le trafic routier. Le système comprend quatre composants principaux permettant l'optimisation d'hyperparamètres, l'entraînement de modèles, l'évaluation des performances et l'analyse de similarité entre modèles.
+## 🎯 Aperçu
 
-### Contexte Académique
+Le projet propose une pipeline complète pour :
 
-Ce travail a été réalisé dans le cadre de mon **stage de M1 Informatique Parcours Intelligence Artificielle** au sein du **Laboratoire CReSTIC - Lab-i*** de l'**Université de Reims Champagne-Ardennes**.
+- **Optimisation automatique** d'hyperparamètres avec Optuna
+- **Entraînement de modèles LSTM** spécialisés par capteur
+- **Interface graphique** interactive (Streamlit) et **mode CLI**
+- **Analyse de similarité** entre modèles pour identifier les possibilités de consolidation
+- **Visualisations avancées** des performances et prédictions
 
-Le projet s'inscrit dans une démarche de recherche appliquée sur l'utilisation de l'intelligence artificielle pour l'optimisation du trafic urbain et la prédiction des flux de véhicules en temps réel.
+### Fonctionnalités principales
 
-## ✨ Fonctionnalités
+- 🧠 **Modèles LSTM** avec feature engineering automatique (moyennes mobiles, encodage cyclique)
+- 🔧 **Optimisation bayésienne** des hyperparamètres avec validation croisée temporelle
+- 📊 **Interface web** intuitive avec Streamlit
+- 💻 **Mode CLI** pour l'automatisation et la production
+- 🔍 **Analyse de similarité** pour optimiser le nombre de modèles
+- 📈 **Visualisations interactives** des performances et prédictions
 
-### 🚀 **Launcher Unifié (`main.py`)**
-- Interface interactive pour tous les composants
-- Détection automatique des dépendances
-- Lancement direct en ligne de commande
-- Diagnostic complet du système
-
-### 🔧 **Optimisation d'Hyperparamètres (`tuning_lstm.py`)**
-- Optimisation bayésienne avec **Optuna**
-- Validation croisée temporelle (TimeSeriesSplit)
-- Parallélisation multi-GPU automatique
-- Early stopping intelligent
-- Sauvegarde automatique des modèles optimaux
-
-### 🧠 **Entraînement et Évaluation (`lstm.py`)**
-- **Interface GUI** (Streamlit) et **CLI**
-- Entraînement de modèles LSTM personnalisés
-- Validation croisée optionnelle
-- Visualisations interactives des prédictions
-- Support multi-capteurs
-
-### 📊 **Analyse de Similarité (`analyse_similarite_lstm.py`)**
-- Analyse de performance croisée entre modèles
-- Clustering hiérarchique des modèles similaires
-- Recommandations de consolidation
-- Matrices de similarité interactives
-- Interface Streamlit dédiée
-
-## 🛠 Installation
+## 🚀 Installation
 
 ### Prérequis
-- Python 3.8 ou supérieur
-- CUDA (optionnel, pour l'accélération GPU)
 
-### Installation des Dépendances
+- Python 3.8+
+- CUDA (optionnel, pour accélération GPU)
+
+### Installation des dépendances
 
 ```bash
 # Cloner le repository
-git clone https://github.com/votre-username/lstm-traffic-prediction.git
-cd lstm-traffic-prediction
+git clone https://github.com/Artazione/lstm_Prediction_Vehicule
+cd lstm_Prediction_Vehicule
 
 # Installer les dépendances
 pip install -r requirements.txt
 ```
 
-### Dépendances Principales
+### Structure des données
 
-Le fichier `requirements.txt` contient toutes les dépendances nécessaires :
-
-```
-# Core ML libraries
-torch>=1.9.0
-torchvision>=0.10.0
-scikit-learn>=1.0.0
-numpy>=1.21.0
-pandas>=1.3.0
-
-# Optimization
-optuna>=3.0.0
-
-# GUI and Visualization
-streamlit>=1.28.0
-plotly>=5.0.0
-matplotlib>=3.5.0
-
-# Data processing
-scipy>=1.7.0
-python-dateutil>=2.8.0
-
-# CLI utilities
-tabulate>=0.9.0
-
-# Optional dependencies for enhanced functionality
-seaborn>=0.11.0
-```
-
-## 📁 Structure du Projet
+Organisez vos données CSV (provenant de https://avatar.cerema.fr/) selon cette structure :
 
 ```
-lstm-traffic-prediction/
-├── main.py                        # 🚀 Launcher principal
-├── tuning_lstm.py                  # 🔧 Optimisation d'hyperparamètres
-├── lstm.py                         # 🧠 Entraînement et évaluation
-├── analyse_similarite_lstm.py      # 📊 Analyse de similarité
-├── requirements.txt                # 📦 Dépendances Python
-├── README.md                       # 📖 Documentation
-├── data/                           # 📂 Données d'entrée
-│   ├── intersection1/
-│   │   └── traffic_data.csv
-│   ├── intersection2/
-│   │   └── traffic_data.csv
-│   └── ...
-├── models/                         # 🤖 Modèles sauvegardés
-│   ├── sensor_A12_Intersection1_bs64_hs128_nl2_do20_lr1e-3_ep50_ws24_mae125.pt
-│   └── ...
-└── results/                        # 📈 Résultats et visualisations
-    ├── predictions/
-    ├── comparisons/
-    └── similarity_analysis/
+data/
+├── Intersection1/
+│   └── donnees_capteurs.csv
+├── Intersection2/
+│   └── donnees_capteurs.csv
+└── ...
 ```
 
-## 🚀 Guide d'Utilisation
+## 🏗️ Structure du projet
 
-### Démarrage Rapide
+```
+lstm_Prediction_Vehicule/
+├── main.py                      # 🎮 Launcher principal
+├── tuning_lstm.py               # 🔧 Optimisation d'hyperparamètres
+├── lstm.py                      # 🧠 Entraînement et évaluation des modèles
+├── analyse_similarite_lstm.py   # 🔍 Analyse de similarité entre modèles
+├── requirements.txt             # 📦 Dépendances Python
+├── data/                        # 📁 Dossier des données CSV
+├── models/                      # 💾 Modèles entraînés (.pt)
+└── resultats/                   # 📊 Résultats et visualisations
+```
 
-#### 1. Interface Interactive (Recommandé)
+## 📖 Utilisation
+
+### Launcher principal (`main.py`)
+
+Le point d'entrée unique qui permet d'accéder à tous les composants du projet.
+
+#### Interface interactive
 ```bash
 python main.py
 ```
 
-Cette commande lance l'interface interactive qui :
-- Affiche le statut de tous les composants
-- Vérifie les dépendances automatiquement
-- Propose une sélection guidée des fonctionnalités
-
-#### 2. Vérification du Système
+#### Lancement direct d'un composant
 ```bash
+# Optimisation d'hyperparamètres
+python main.py --component tuning --data ./data --trials 50
+
+# Entraînement de modèles (interface web)
+python main.py --component lstm --data ./data
+
+# Entraînement de modèles (mode CLI)
+python main.py --component lstm --cli --data ./data --output ./resultats
+
+# Analyse de similarité (interface web)
+python main.py --component similarity
+
+# Analyse de similarité (mode CLI)
+python main.py --component similarity --cli --data ./data --models ./models --output ./resultats
+```
+
+#### Aide et statut
+```bash
+# Vérifier le statut des composants
 python main.py --status
-```
 
-Affiche un diagnostic complet avec les dépendances manquantes et les instructions d'installation.
-
-#### 3. Aide Contextuelle
-```bash
-python main.py --help-component tuning
+# Aide détaillée pour un composant
 python main.py --help-component lstm
-python main.py --help-component similarity
 ```
 
-### Workflow Typique
+### Optimisation d'hyperparamètres (`tuning_lstm.py`)
 
-1. **Préparation des données** : Placer les fichiers CSV dans `data/`
-2. **Optimisation** : `tuning_lstm.py` pour trouver les meilleurs hyperparamètres
-3. **Entraînement** : `lstm.py` pour entraîner avec les paramètres optimaux
-4. **Analyse** : `analyse_similarite_lstm.py` pour analyser les similarités
+Optimise automatiquement les hyperparamètres LSTM pour chaque capteur avec Optuna.
 
-## 📘 Exemples Détaillés
-
-### 🔧 1. Optimisation d'Hyperparamètres
-
-#### Utilisation de Base
+#### Utilisation
 ```bash
-# Via le launcher
-python main.py --component tuning --data ./data --trials 100
-
-# Directement
-python tuning_lstm.py --data ./data --trials 100
+python tuning_lstm.py --data ./data --trials 100 --threshold 1.0
 ```
 
-#### Configuration Avancée
+#### Paramètres
+
+- `--data` : Dossier racine contenant les données d'intersections
+- `--trials` : Nombre d'essais Optuna par capteur (défaut: 100)
+- `--threshold` : Seuil MAE% pour privilégier la simplicité (défaut: 1.0)
+
+#### Fonctionnalités
+
+- **Optimisation bayésienne** avec Optuna
+- **Validation croisée temporelle** (TimeSeriesSplit)
+- **Parallélisation multi-GPU** automatique
+- **Early stopping** pour éviter le surapprentissage
+- **Sauvegarde automatique** avec nomenclature descriptive
+
+#### Exemple de sortie
+```
+=== Intersection1 / CapteurA ===
+Final: MAE%=2.34, params=1247
+Modèle enregistré: models/sensor_CapteurA_Intersection1_bs64_hs96_nl2_do30_lr5e-04_ep25_ws24_mae234.pt
+```
+
+### Entraînement et évaluation (`lstm.py`)
+
+Application complète pour l'entraînement et l'évaluation des modèles LSTM.
+
+#### Mode GUI (Interface web)
 ```bash
-# Optimisation intensive
-python tuning_lstm.py \
-    --data ./traffic_data \
-    --trials 500 \
-    --threshold 0.5
-```
-
-**Fonctionnalités :**
-- **Optimisation multi-objectifs** : Minimise la MAE et la complexité du modèle
-- **Validation croisée temporelle** : 5 folds avec TimeSeriesSplit
-- **Parallélisation automatique** : Utilise tous les GPU disponibles
-- **Early stopping** : Arrêt intelligent pour éviter le surapprentissage
-
-**Sortie :**
-```
-models/
-├── sensor_A12_Intersection1_bs64_hs128_nl2_do20_lr1e-3_ep50_ws24_mae125.pt
-├── sensor_B23_Intersection2_bs32_hs96_nl3_do30_lr5e-4_ep40_ws12_mae110.pt
-└── ...
-```
-
-### 🧠 2. Entraînement et Évaluation
-
-#### Mode GUI (Interface Streamlit)
-```bash
-# Via le launcher
-python main.py --component lstm
-
-# Directement
 python lstm.py
 ```
 
-**Interface Web :** Ouvre automatiquement dans le navigateur avec :
-- Upload de fichiers CSV par glisser-déposer
-- Sélection interactive des capteurs
-- Configuration des hyperparamètres via sliders
-- Visualisations en temps réel
-- Téléchargement des modèles entraînés
+Fonctionnalités de l'interface web :
+- 📁 **Upload de fichiers CSV** par glisser-déposer
+- 🎛️ **Configuration interactive** des hyperparamètres
+- 📊 **Visualisations en temps réel** des performances
+- 💾 **Téléchargement automatique** des modèles
+- 🔄 **Validation croisée optionnelle**
 
-#### Mode CLI (Ligne de Commande)
+#### Mode CLI
 ```bash
-# Entraînement en mode CLI
-python main.py --component lstm --cli --data ./data --output ./results
-
-# Mode verbeux
-python lstm.py --cli --data ./data --output ./results --verbose
-
-# Mode silencieux
-python lstm.py --cli --data ./data --output ./results --quiet
+python lstm.py --cli --data ./data --output ./resultats --verbose
 ```
 
-**Workflow CLI :**
-1. **Découverte automatique** des fichiers CSV
-2. **Sélection interactive** des fichiers et capteurs
-3. **Configuration guidée** des hyperparamètres
-4. **Entraînement avec validation croisée** (optionnelle)
-5. **Génération automatique** des visualisations
-6. **Sauvegarde structurée** des résultats
+Paramètres CLI :
+- `--data` : Dossier des données CSV (défaut: ./data)
+- `--output` : Dossier de sortie (défaut: ./resultats)
+- `--verbose` : Mode verbeux
+- `--quiet` : Mode silencieux
 
-#### Modes d'Utilisation Disponibles
+#### Modes d'utilisation CLI
 
-##### **A. Entraîner Nouveau Modèle**
+1. **Entraîner nouveau modèle**
+   - Configuration interactive des hyperparamètres
+   - Sélection des capteurs à traiter
+   - Validation croisée optionnelle
+
+2. **Charger modèle existant**
+   - Évaluation de modèles pré-entraînés
+   - Génération de nouvelles prédictions
+   - Comparaison des performances
+
+3. **Comparer plusieurs modèles**
+   - Analyse comparative de performance
+   - Visualisations côte à côte
+   - Identification du meilleur modèle
+
+### Analyse de similarité (`analyse_similarite_lstm.py`)
+
+Analyse la similarité entre modèles pour identifier les possibilités de consolidation.
+
+#### Mode GUI (Interface web)
 ```bash
-# Configuration interactive des hyperparamètres
-Enter hidden_size [64]: 128
-Enter num_layers [2]: 3
-Enter dropout [0.2]: 0.3
-Enter learning_rate [0.0005]: 0.001
-Enter epochs [20]: 50
-Enter window_size [12]: 24
+python analyse_similarite_lstm.py
 ```
 
-##### **B. Charger Modèle Existant**
+Fonctionnalités de l'interface :
+- 🔍 **Sélection interactive** des modèles à comparer
+- 📊 **Matrice de performance croisée** interactive
+- 🌳 **Dendrogramme de clustering** hiérarchique
+- 💡 **Recommandations de consolidation** automatiques
+
+#### Mode CLI
 ```bash
-# Évaluation de modèles pré-entraînés
-python lstm.py --cli
-# Sélectionnez "Charger modèle existant"
-# Choisissez les modèles .pt à évaluer
+python analyse_similarite_lstm.py --cli --data ./data --models ./models --threshold 5.0 --output ./resultats
 ```
 
-##### **C. Comparer Plusieurs Modèles**
-```bash
-# Comparaison de performances
-python lstm.py --cli
-# Sélectionnez "Comparer plusieurs modèles"
-# Sélectionnez 2+ modèles pour le même capteur
+Paramètres CLI :
+- `--data` : Dossier des données CSV
+- `--models` : Dossier des modèles (.pt)
+- `--threshold` : Seuil de similarité MAE% (défaut: 5.0)
+- `--output` : Dossier de sortie des résultats
+
+#### Fonctionnalités d'analyse
+
+- **Performance croisée** : Test de chaque modèle sur les données des autres capteurs
+- **Clustering hiérarchique** : Regroupement des modèles similaires
+- **Métriques de consolidation** : Calcul du potentiel de réduction
+- **Visualisations avancées** : Heatmaps, dendrogrammes, graphiques temporels
+
+#### Exemple de sortie CLI
+```
+📊 ANALYSE DE REGROUPEMENT (Seuil: 5.0% MAE)
+✅ 3 paire(s) de modèles similaires trouvée(s):
+
+   1. CapteurA (Intersection1) ↔ CapteurB (Intersection1)
+      Différence moyenne: 2.45% MAE
+
+💡 RECOMMANDATIONS DE CONSOLIDATION:
+   Groupe 1 - Peut utiliser un modèle commun:
+     - CapteurA (Intersection1) - MAE original: 2.1%
+     - CapteurB (Intersection1) - MAE original: 2.3%
+
+📈 IMPACT DE LA CONSOLIDATION:
+   • Réduction possible: 3 modèles en moins
+   • Pourcentage de réduction: 25.0%
 ```
 
-### 📊 3. Analyse de Similarité
+## 📁 Format des données
 
-#### Interface Streamlit Dédiée
-```bash
-# Via le launcher
-python main.py --component similarity
-
-# Directement
-streamlit run analyse_similarite_lstm.py
-```
-
-**Fonctionnalités de l'Interface :**
-
-1. **Configuration Initiale**
-   - Sélection des dossiers de données et modèles
-   - Réglage du seuil de similarité (1-20% MAE)
-   - Détection automatique du device (CPU/GPU)
-
-2. **Analyse de Performance Croisée**
-   - Matrice de performance interactive
-   - Test de chaque modèle sur les données des autres capteurs
-   - Calcul des différences relatives
-
-3. **Visualisations Avancées**
-   - **Heatmap interactive** : Matrice de performance avec échelle de couleurs
-   - **Dendrogramme** : Clustering hiérarchique des modèles
-   - **Tableaux récapitulatifs** : Performances détaillées par paire
-
-4. **Recommandations Intelligentes**
-   - Identification des modèles consolidables
-   - Calcul du potentiel de réduction
-   - Stratégies de groupement optimales
-
-#### Exemple de Sortie d'Analyse
-
-```
-🎯 Modèles similaires trouvés (seuil: 5.0% MAE):
-
-Groupe 1: Peut utiliser un modèle commun
-- A12 (Intersection_Centre) - MAE original: 12.5%
-- A15 (Intersection_Centre) - MAE original: 11.8%
-- B03 (Intersection_Centre) - MAE original: 13.2%
-
-Réduction potentielle: 2 modèles en moins (40% de réduction)
-```
-
-## 🏗 Architecture LSTM
-
-### Modèle Neural Network
-
-```python
-class RegresseurLSTM(nn.Module):
-    def __init__(self, in_size=6, hid_size=64, n_layers=2, dropout=0.2):
-        super().__init__()
-        self.lstm = nn.LSTM(in_size, hid_size, n_layers, 
-                           dropout=dropout, batch_first=True)
-        self.fc = nn.Linear(hid_size, 1)
-```
-
-### Features d'Entrée (6 dimensions)
-
-1. **`flow`** : Flux du capteur (variable cible)
-2. **`hour_cos`** : Encodage cyclique de l'heure (cos(2π×heure/24))
-3. **`mean_flow_others`** : Flux moyen des autres capteurs (contexte spatial)
-4. **`ma3`** : Moyenne mobile sur 3 périodes (tendance court terme)
-5. **`ma6`** : Moyenne mobile sur 6 périodes (tendance moyen terme)
-6. **`ma12`** : Moyenne mobile sur 12 périodes (tendance long terme)
-
-### Hyperparamètres Optimisables
-
-| Paramètre | Plage | Description |
-|-----------|-------|-------------|
-| `hidden_size` | 64-128 | Taille des couches cachées LSTM |
-| `num_layers` | 2-4 | Nombre de couches LSTM empilées |
-| `dropout` | 0.3-0.5 | Taux de dropout pour régularisation |
-| `learning_rate` | 1e-4 à 1e-3 | Taux d'apprentissage Adam |
-| `batch_size` | 16-128 | Taille des batchs d'entraînement |
-| `window_size` | 12-24 | Longueur des séquences temporelles |
-| `num_epochs` | 20-40 | Nombre d'époques d'entraînement |
-
-## 📂 Datasets
-
-### Format des Données d'Entrée
-
-Les données doivent être organisées par intersection avec des fichiers CSV contenant :
+Les données CSV doivent provenir du site https://avatar.cerema.fr/ et contenir les colonnes suivantes :
 
 ```csv
-count_point_name,measure_datetime,flow[veh/h]
-A12,2025-07-01 00:00:00+02:00,145
-A12,2025-07-01 01:00:00+02:00,89
-A12,2025-07-01 02:00:00+02:00,67
-A15,2025-07-01 00:00:00+02:00,203
-A15,2025-07-01 01:00:00+02:00,156
+count_point_name;measure_datetime;flow[veh/h]
+CapteurA;2024-01-01T00:00:00+01:00;45
+CapteurB;2024-01-01T00:00:00+01:00;67
 ...
 ```
 
-### Structure Recommandée
+### Colonnes requises
 
+- `count_point_name` : Nom/ID du capteur
+- `measure_datetime` : Timestamp au format ISO 8601
+- `flow[veh/h]` : Flux de véhicules par heure
+
+### Feature engineering automatique
+
+Le système génère automatiquement les caractéristiques suivantes :
+
+- **hour_cos** : Encodage cyclique de l'heure (cosinus)
+- **mean_flow_others** : Flux moyen des autres capteurs
+- **ma3, ma6, ma12** : Moyennes mobiles sur 3, 6 et 12 périodes
+
+## 💡 Exemples d'utilisation
+
+### Workflow complet
+
+1. **Collecte des données**
+   ```bash
+   # Organiser les données par intersection
+   mkdir -p data/Intersection1 data/Intersection2
+   # Copier les fichiers CSV dans les dossiers appropriés
+   ```
+
+2. **Optimisation des hyperparamètres**
+   ```bash
+   python main.py --component tuning --data ./data --trials 50
+   ```
+
+3. **Entraînement des modèles**
+   ```bash
+   python main.py --component lstm --cli --data ./data --output ./resultats
+   ```
+
+4. **Analyse de similarité**
+   ```bash
+   python main.py --component similarity --cli --data ./data --models ./models --output ./resultats
+   ```
+
+### Cas d'usage spécifiques
+
+#### Développement et expérimentation
+```bash
+# Interface graphique pour l'exploration interactive
+python lstm.py
 ```
-data/
-├── intersection_centre/
-│   └── traffic_2025.csv
-├── intersection_nord/
-│   └── traffic_2025.csv
-├── intersection_sud/
-│   └── traffic_2025.csv
-└── intersection_est/
-    └── traffic_2025.csv
+
+#### Production et automatisation
+```bash
+# Pipeline CLI complète
+python tuning_lstm.py --data ./data --trials 100
+python lstm.py --cli --data ./data --output ./models --quiet
+python analyse_similarite_lstm.py --cli --data ./data --models ./models --output ./resultats
 ```
 
-### Préprocessing Automatique
+#### Analyse comparative
+```bash
+# Comparaison de plusieurs jeux d'hyperparamètres
+python lstm.py --cli --data ./data --output ./resultats
+# Sélectionner "Comparer plusieurs modèles"
+```
 
-- **Nettoyage des timestamps** : Conversion UTC → Europe/Paris
-- **Gestion des valeurs manquantes** : Imputation par moyenne
-- **Validation des données** : Vérification de cohérence
-- **Feature engineering** : Génération automatique des 6 features
+## 📊 Visualisations
 
-## 📊 Métriques et Évaluation
+Le projet génère automatiquement plusieurs types de visualisations :
 
-### Métriques Principales
+### Mode GUI (Streamlit)
+- **Courbes d'entraînement** interactives
+- **Prédictions vs réalité** avec sélection de date
+- **Matrices de confusion** pour l'analyse d'erreurs
+- **Dendrogrammes** de clustering
+- **Heatmaps** de performance croisée
 
-- **MAE (Mean Absolute Error)** : Erreur absolue moyenne
-- **MAE%** : MAE normalisée par le flux moyen (interprétation intuitive)
-- **MSE (Mean Squared Error)** : Erreur quadratique moyenne
+### Mode CLI
+- **Graphiques PNG** haute résolution sauvegardés
+- **Tableaux ASCII** formatés dans le terminal
+- **Rapports CSV** détaillés
+- **Logs complets** de l'entraînement
 
-### Validation
+### Exemples de fichiers générés
+```
+resultats/
+├── 20250124_143052/
+│   ├── loss_capteur_A12_20250124_143052.png
+│   ├── predictions_capteur_A12_2024-01-15_20250124_143052.png
+│   ├── heatmap_performance_20250124_143052.png
+│   ├── dendrogramme_20250124_143052.png
+│   ├── resultats_croises_20250124_143052.csv
+│   └── details_modeles_20250124_143052.csv
+```
 
-- **Validation croisée temporelle** : TimeSeriesSplit (5 folds)
-- **Division temporelle** : 80% entraînement / 20% test
-- **Early stopping** : Patience de 10 époques
+## 🔧 Configuration avancée
 
-## 🤝 Remerciements
+### Variables d'environnement
+```bash
+export CUDA_VISIBLE_DEVICES=0,1  # Sélection des GPU
+export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128  # Gestion mémoire GPU
+```
 
-Je tiens à remercier chaleureusement l'équipe du **Laboratoire CReSTIC - Lab-i*** de l'**Université de Reims Champagne-Ardennes** pour leur encadrement et leur soutien tout au long de ce stage de M1 :
+### Optimisation GPU
+```python
+# Dans tuning_lstm.py, ajuster selon votre matériel
+MAX_WORKERS = 2  # Nombre de workers DataLoader
+PATIENCE = 10    # Patience pour early stopping
+```
 
-- **Monsieur Fouchal** - Directeur de stage et encadrant principal
-- **Monsieur Rabat** - Co-encadrant et expert en intelligence artificielle  
-- **Monsieur Ninet** - Conseiller technique et spécialiste des réseaux
-- **Monsieur Keziou** - Expert en analyse de données et statistiques
+### Personnalisation des hyperparamètres
+Modifier les plages dans `tuning_lstm.py` :
+```python
+params = {
+    'hidden_size': trial.suggest_categorical('hidden_size', [32, 64, 128, 256]),
+    'num_layers': trial.suggest_int('num_layers', 1, 5),
+    # ...
+}
+```
 
-Leur expertise, leurs conseils avisés et leur disponibilité ont été essentiels à la réussite de ce projet de recherche appliquée.
+## 🎯 Remerciements
 
-## 📄 Licence
+Ce projet a été réalisé dans le cadre d'un stage de M1 Informatique Parcours Intelligence Artificielle à l'Université de Reims Champagne-Ardenne, au sein du laboratoire Lab-i*.
 
-Ce projet est sous licence MIT. Voir le fichier [LICENSE](LICENSE) pour plus de détails.
+**Remerciements particuliers à :**
+- **Monsieur Fouchal**
+- **Monsieur Rabat** 
+- **Monsieur Ninet**
+- **Monsieur Keziou**
+
+Pour leur encadrement, leurs conseils et leur soutien tout au long de ce projet.
 
 ---
 
-## 📞 Support et Contact
+### 📞 Support
 
-- **Auteur :** Jules Lefèvre
-- **Email :** jules.lefevre@etudiant.univ-reims.fr
-- **Institution :** Université de Reims Champagne-Ardennes
-- **Laboratoire :** CReSTIC - Lab-i*
-
-Pour toute question, suggestion ou contribution, n'hésitez pas à ouvrir une issue ou à me contacter directement.
-
----
-
-**Fait avec ❤️ dans le cadre du M1 Intelligence Artificielle - URCA 2025**
+Pour toute question ou problème :
+- Consultez les logs d'erreur avec `--verbose`
+- Vérifiez le statut des composants avec `python main.py --status`
+- Assurez-vous que les données respectent le format requis

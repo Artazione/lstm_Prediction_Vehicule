@@ -2,24 +2,49 @@
 Script: analyse_similarite_lstm.py
 Auteur: Jules Lefèvre <jules.lefevre@etudiant.univ-reims.fr>
 Date de création: 21/07/2025
-Description: Application Streamlit pour analyser la similarité entre modèles LSTM 
+Description: Application Streamlit/CLI pour analyser la similarité entre modèles LSTM 
             entraînés sur différents capteurs de trafic. L'outil permet d'identifier 
             les modèles qui peuvent être consolidés en un seul modèle généraliste,
             basé sur l'analyse des performances croisées (test d'un modèle sur les 
             données d'un autre capteur). Inclut visualisations interactives, 
             clustering hiérarchique et recommandations de consolidation.
+            
+Usage:
+    # Mode GUI (Streamlit)
+    python analyse_similarite_lstm.py
+    
+    # Mode CLI
+    python analyse_similarite_lstm.py --cli --data ./data --models ./models --threshold 5.0 --output ./resultats
 """
 
-import streamlit as st
+import argparse
+import sys
+import os
+import re
+import glob
+from pathlib import Path
+import warnings
+warnings.filterwarnings('ignore')
+
+# Imports scientifiques
 import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
-import os
-import re
-import glob
-from pathlib import Path
+
+# Imports pour la CLI
+from tabulate import tabulate
+from datetime import datetime
+
+# Imports conditionnels pour Streamlit (seulement si mode GUI)
+try:
+    import streamlit as st
+    STREAMLIT_AVAILABLE = True
+except ImportError:
+    STREAMLIT_AVAILABLE = False
+
+# Imports pour les visualisations
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -27,19 +52,50 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import AgglomerativeClustering
 from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.spatial.distance import squareform
-import warnings
-warnings.filterwarnings('ignore')
 
 # =============================================================================
-# CONFIGURATION DE L'APPLICATION STREAMLIT
+# CONFIGURATION GLOBALE
 # =============================================================================
 
-# Configuration de la page Streamlit avec titre, icône et layout
-st.set_page_config(
-    page_title="Analyse de Similarité des Modèles LSTM",
-    page_icon="🧠",
-    layout="wide"
-)
+# Variable globale pour contrôler le mode d'exécution
+CLI_MODE = False
+VERBOSE_LEVEL = 1  # 0: quiet, 1: normal, 2: verbose
+
+def log_message(message, level=1):
+    """Affiche un message selon le niveau de verbosité."""
+    if not CLI_MODE:
+        return  # En mode GUI, les messages sont gérés par Streamlit
+    
+    if VERBOSE_LEVEL >= level:
+        print(message)
+
+def log_error(message):
+    """Affiche un message d'erreur."""
+    if CLI_MODE:
+        print(f"ERREUR: {message}", file=sys.stderr)
+    else:
+        st.error(message)
+
+def log_success(message):
+    """Affiche un message de succès."""
+    if CLI_MODE:
+        log_message(f"✅ {message}")
+    else:
+        st.success(message)
+
+def log_info(message):
+    """Affiche un message informatif."""
+    if CLI_MODE:
+        log_message(f"ℹ️  {message}")
+    else:
+        st.info(message)
+
+def log_warning(message):
+    """Affiche un avertissement."""
+    if CLI_MODE:
+        log_message(f"⚠️  {message}")
+    else:
+        st.warning(message)
 
 # =============================================================================
 # DÉFINITION DE L'ARCHITECTURE LSTM
@@ -86,7 +142,6 @@ class RegresseurLSTM(nn.Module):
 # FONCTIONS DE CHARGEMENT ET PRÉPARATION DES DONNÉES
 # =============================================================================
 
-@st.cache_data
 def charger_donnees_selectif(dossier_racine, intersections_necessaires):
     """
     Charge sélectivement les données CSV des intersections nécessaires pour optimiser les performances.
@@ -106,10 +161,10 @@ def charger_donnees_selectif(dossier_racine, intersections_necessaires):
     
     # Vérification de l'existence du dossier racine
     if not os.path.exists(dossier_racine):
-        st.error(f"Dossier '{dossier_racine}' introuvable.")
+        log_error(f"Dossier '{dossier_racine}' introuvable.")
         return donnees
     
-    st.info(f"🎯 Chargement sélectif pour: {list(intersections_necessaires)}")
+    log_info(f"Chargement sélectif pour: {list(intersections_necessaires)}")
     
     # Parcours de tous les dossiers d'intersections
     for inter in sorted(os.listdir(dossier_racine)):
@@ -150,14 +205,13 @@ def charger_donnees_selectif(dossier_racine, intersections_necessaires):
             ).sort_index()
             
             donnees[inter] = pivot
-            st.success(f"✅ {inter}: {pivot.shape[0]} lignes, {pivot.shape[1]} capteurs")
+            log_success(f"{inter}: {pivot.shape[0]} lignes, {pivot.shape[1]} capteurs")
             
         except Exception as e:
-            st.error(f"❌ Erreur {inter}: {e}")
+            log_error(f"Erreur {inter}: {e}")
     
     return donnees
 
-@st.cache_data
 def creer_caracteristiques_selectif(donnees, capteurs_necessaires):
     """
     Crée les caractéristiques d'entrée pour les modèles LSTM, uniquement pour les capteurs nécessaires.
@@ -224,7 +278,7 @@ def creer_caracteristiques_selectif(donnees, capteurs_necessaires):
             
             # Suppression des lignes avec des valeurs manquantes dans 'flow'
             feats[(inter, cap)] = dfc.dropna(subset=['flow'])
-            st.info(f"📊 Caractéristiques créées pour {inter} - capteur {cap}")
+            log_info(f"Caractéristiques créées pour {inter} - capteur {cap}")
     
     return feats
 
@@ -313,13 +367,9 @@ def extraire_capteur_intersection(capteur_inter):
 # FONCTIONS DE CHARGEMENT ET ÉVALUATION DES MODÈLES
 # =============================================================================
 
-@st.cache_resource
 def charger_modele(chemin_modele, params, device):
     """
     Charge un modèle LSTM depuis un fichier .pt.
-    
-    Utilise le décorateur @st.cache_resource pour éviter de recharger
-    le même modèle plusieurs fois pendant la session.
     
     Args:
         chemin_modele (str): Chemin vers le fichier .pt
@@ -383,24 +433,705 @@ def evaluer_modele(model, X_test, y_test, device, mean_flow):
     return mae_pct, predictions
 
 # =============================================================================
-# FONCTION PRINCIPALE DE L'APPLICATION
+# FONCTIONS DE SAUVEGARDE POUR CLI
 # =============================================================================
 
-def main():
+def sauvegarder_resultats_cli(output_dir, resultats_croises, matrice_mae, modeles_selectionnes, 
+                             modeles_valides, modeles_similaires, seuil_similarite):
     """
-    Fonction principale de l'application Streamlit.
+    Sauvegarde tous les résultats de l'analyse en mode CLI.
     
-    Orchestration complète de l'analyse de similarité:
-    1. Configuration de l'interface utilisateur
-    2. Chargement sélectif des données et modèles
-    3. Calcul de la matrice de performance croisée
-    4. Analyse de similarité et clustering
-    5. Génération des recommandations
+    Args:
+        output_dir (str): Dossier de sortie
+        resultats_croises (list): Liste des résultats croisés
+        matrice_mae (np.array): Matrice de performance
+        modeles_selectionnes (list): Liste des modèles analysés
+        modeles_valides (dict): Informations des modèles
+        modeles_similaires (list): Paires de modèles similaires
+        seuil_similarite (float): Seuil utilisé
     """
+    # Création du dossier de sortie
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # =============================================================================
-    # INTERFACE UTILISATEUR ET CONFIGURATION
-    # =============================================================================
+    # 1. Sauvegarde des résultats croisés
+    df_resultats = pd.DataFrame(resultats_croises)
+    fichier_resultats = os.path.join(output_dir, f"resultats_croises_{timestamp}.csv")
+    df_resultats.to_csv(fichier_resultats, index=False, encoding='utf-8')
+    log_success(f"Résultats croisés sauvegardés: {fichier_resultats}")
+    
+    # 2. Sauvegarde de la matrice de performance
+    n_modeles = len(modeles_selectionnes)
+    df_matrice = pd.DataFrame(
+        matrice_mae,
+        index=[f"Capteur_{modeles_valides[modeles_selectionnes[i]]['capteur']}" for i in range(n_modeles)],
+        columns=[f"Données_{modeles_valides[modeles_selectionnes[i]]['capteur']}" for i in range(n_modeles)]
+    )
+    fichier_matrice = os.path.join(output_dir, f"matrice_performance_{timestamp}.csv")
+    df_matrice.to_csv(fichier_matrice, encoding='utf-8')
+    log_success(f"Matrice de performance sauvegardée: {fichier_matrice}")
+    
+    # 3. Sauvegarde des modèles similaires
+    if modeles_similaires:
+        data_similaires = []
+        for i, j, diff in modeles_similaires:
+            nom_i = modeles_selectionnes[i]
+            nom_j = modeles_selectionnes[j]
+            data_similaires.append({
+                'Capteur_1': modeles_valides[nom_i]['capteur'],
+                'Intersection_1': modeles_valides[nom_i]['intersection'],
+                'Capteur_2': modeles_valides[nom_j]['capteur'],
+                'Intersection_2': modeles_valides[nom_j]['intersection'],
+                'Difference_MAE_Moyenne': diff,
+                'Seuil_Utilise': seuil_similarite
+            })
+        
+        df_similaires = pd.DataFrame(data_similaires)
+        fichier_similaires = os.path.join(output_dir, f"modeles_similaires_{timestamp}.csv")
+        df_similaires.to_csv(fichier_similaires, index=False, encoding='utf-8')
+        log_success(f"Modèles similaires sauvegardés: {fichier_similaires}")
+    
+    # 4. Sauvegarde des détails des modèles
+    resultats_details = []
+    for i, nom_modele in enumerate(modeles_selectionnes):
+        info = modeles_valides[nom_modele]
+        resultats_details.append({
+            'Modele_ID': f"Modele_{i+1}",
+            'Nom_Fichier': nom_modele,
+            'Capteur': info['capteur'],
+            'Intersection': info['intersection'],
+            'MAE_Original_Pct': info['params']['mae_original'],
+            'Hidden_Size': info['params']['hidden_size'],
+            'Num_Layers': info['params']['num_layers'],
+            'Dropout': info['params']['dropout'],
+            'Window_Size': info['params']['window_size'],
+            'Learning_Rate': info['params']['learning_rate'],
+            'Num_Epochs': info['params']['num_epochs']
+        })
+    
+    df_details = pd.DataFrame(resultats_details)
+    fichier_details = os.path.join(output_dir, f"details_modeles_{timestamp}.csv")
+    df_details.to_csv(fichier_details, index=False, encoding='utf-8')
+    log_success(f"Détails des modèles sauvegardés: {fichier_details}")
+    
+    return timestamp
+
+def sauvegarder_visualisations_cli(output_dir, timestamp, matrice_mae, modeles_selectionnes, 
+                                  modeles_valides):
+    """
+    Sauvegarde les visualisations en mode CLI.
+    
+    Args:
+        output_dir (str): Dossier de sortie
+        timestamp (str): Timestamp pour nommer les fichiers
+        matrice_mae (np.array): Matrice de performance
+        modeles_selectionnes (list): Liste des modèles analysés
+        modeles_valides (dict): Informations des modèles
+    """
+    # Configuration pour éviter les avertissements matplotlib
+    plt.ioff()  # Mode non-interactif
+    
+    # 1. Heatmap de la matrice de performance
+    try:
+        n_modeles = len(modeles_selectionnes)
+        df_matrice = pd.DataFrame(
+            matrice_mae,
+            index=[f"Capteur_{modeles_valides[modeles_selectionnes[i]]['capteur']}" for i in range(n_modeles)],
+            columns=[f"Données_{modeles_valides[modeles_selectionnes[i]]['capteur']}" for i in range(n_modeles)]
+        )
+        
+        # Remplacer les valeurs infinies pour l'affichage
+        df_matrice_display = df_matrice.replace([np.inf, -np.inf], 999)
+        
+        plt.figure(figsize=(12, 10))
+        sns.heatmap(df_matrice_display, annot=True, fmt='.1f', cmap='RdYlBu_r', 
+                   cbar_kws={'label': 'MAE (%)'})
+        plt.title('Matrice de Performance Croisée (MAE %)', fontsize=16, fontweight='bold')
+        plt.xlabel('Données de test', fontsize=12)
+        plt.ylabel('Modèles', fontsize=12)
+        plt.xticks(rotation=45, ha='right')
+        plt.yticks(rotation=0)
+        plt.tight_layout()
+        
+        fichier_heatmap = os.path.join(output_dir, f"heatmap_performance_{timestamp}.png")
+        plt.savefig(fichier_heatmap, dpi=300, bbox_inches='tight')
+        plt.close()
+        log_success(f"Heatmap sauvegardée: {fichier_heatmap}")
+        
+    except Exception as e:
+        log_error(f"Erreur lors de la sauvegarde de la heatmap: {e}")
+    
+    # 2. Dendrogramme de clustering
+    try:
+        # Calcul de la matrice de distance pour le clustering
+        matrice_diff = np.zeros((n_modeles, n_modeles))
+        for i in range(n_modeles):
+            for j in range(n_modeles):
+                if i != j:
+                    mae_native = matrice_mae[j, j]
+                    mae_croisee = matrice_mae[i, j]
+                    diff_relative = abs(mae_croisee - mae_native)
+                    matrice_diff[i, j] = diff_relative
+        
+        # Construction de la matrice de distance symétrique
+        distance_matrix = np.zeros((n_modeles, n_modeles))
+        for i in range(n_modeles):
+            for j in range(n_modeles):
+                if i != j:
+                    diff_ij = matrice_diff[i, j]
+                    diff_ji = matrice_diff[j, i]
+                    distance_matrix[i, j] = (diff_ij + diff_ji) / 2
+        
+        # Clustering hiérarchique
+        linkage_matrix = linkage(squareform(distance_matrix), method='ward')
+        
+        plt.figure(figsize=(12, 8))
+        labels = [f"{modeles_valides[modeles_selectionnes[i]]['capteur']}" for i in range(n_modeles)]
+        dendrogram(linkage_matrix, labels=labels, orientation='top')
+        plt.title('Dendrogramme de Similarité des Modèles', fontsize=16, fontweight='bold')
+        plt.ylabel('Distance', fontsize=12)
+        plt.xlabel('Capteurs', fontsize=12)
+        plt.xticks(rotation=45, ha='right')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+        fichier_dendro = os.path.join(output_dir, f"dendrogramme_{timestamp}.png")
+        plt.savefig(fichier_dendro, dpi=300, bbox_inches='tight')
+        plt.close()
+        log_success(f"Dendrogramme sauvegardé: {fichier_dendro}")
+        
+    except Exception as e:
+        log_error(f"Erreur lors de la sauvegarde du dendrogramme: {e}")
+
+# =============================================================================
+# FONCTIONS D'INTERFACE CLI
+# =============================================================================
+
+def selectionner_modeles_interactif(modeles_valides):
+    """
+    Interface interactive pour sélectionner les modèles à analyser.
+    
+    Args:
+        modeles_valides (dict): Dictionnaire des modèles disponibles
+        
+    Returns:
+        list: Liste des noms de modèles sélectionnés
+    """
+    noms_modeles = list(modeles_valides.keys())
+    
+    print("\n" + "="*80)
+    print("SÉLECTION DES MODÈLES À ANALYSER")
+    print("="*80)
+    
+    # Affichage de la liste des modèles disponibles
+    print(f"\nModèles disponibles ({len(noms_modeles)}):")
+    for i, nom in enumerate(noms_modeles):
+        info = modeles_valides[nom]
+        print(f"{i+1:2d}. {info['capteur']:10} ({info['intersection']:20}) - MAE: {info['params']['mae_original']}%")
+    
+    print("\nOptions de sélection:")
+    print("  - Numéros séparés par des virgules (ex: 1,3,5)")
+    print("  - Plages avec tirets (ex: 1-5)")
+    print("  - 'all' pour tous les modèles")
+    print("  - 'quit' pour annuler")
+    
+    while True:
+        try:
+            choix = input(f"\nVotre sélection (au moins 2 modèles): ").strip()
+            
+            if choix.lower() == 'quit':
+                print("Analyse annulée.")
+                sys.exit(0)
+            
+            if choix.lower() == 'all':
+                return noms_modeles
+            
+            # Parsing de la sélection
+            indices_selectionnes = set()
+            
+            # Traitement des plages et numéros individuels
+            for partie in choix.split(','):
+                partie = partie.strip()
+                if '-' in partie:
+                    # Plage (ex: 1-5)
+                    debut, fin = map(int, partie.split('-'))
+                    indices_selectionnes.update(range(debut, fin + 1))
+                else:
+                    # Numéro individuel
+                    indices_selectionnes.add(int(partie))
+            
+            # Vérification de la validité des indices
+            indices_valides = [i for i in indices_selectionnes if 1 <= i <= len(noms_modeles)]
+            
+            if len(indices_valides) < 2:
+                print("⚠️  Veuillez sélectionner au moins 2 modèles.")
+                continue
+            
+            # Conversion en noms de modèles
+            modeles_selectionnes = [noms_modeles[i-1] for i in sorted(indices_valides)]
+            
+            # Confirmation de la sélection
+            print(f"\n✅ Modèles sélectionnés ({len(modeles_selectionnes)}):")
+            for nom in modeles_selectionnes:
+                info = modeles_valides[nom]
+                print(f"   - {info['capteur']} ({info['intersection']})")
+            
+            confirmer = input("\nConfirmer cette sélection? (o/n): ").strip().lower()
+            if confirmer in ['o', 'oui', 'y', 'yes']:
+                return modeles_selectionnes
+            
+        except (ValueError, IndexError) as e:
+            print(f"❌ Sélection invalide: {e}")
+            print("   Utilisez le format: 1,3,5 ou 1-5 ou 'all'")
+
+def afficher_tableau_ascii(data, headers, title=None):
+    """
+    Affiche un tableau formaté en ASCII.
+    
+    Args:
+        data (list): Données du tableau
+        headers (list): En-têtes des colonnes
+        title (str): Titre du tableau (optionnel)
+    """
+    if title:
+        print(f"\n{title}")
+        print("=" * len(title))
+    
+    print(tabulate(data, headers=headers, tablefmt='grid'))
+
+def afficher_resultats_cli(resultats_croises, matrice_mae, modeles_selectionnes, 
+                          modeles_valides, modeles_similaires, seuil_similarite):
+    """
+    Affiche tous les résultats de l'analyse en mode CLI.
+    
+    Args:
+        resultats_croises (list): Liste des résultats croisés
+        matrice_mae (np.array): Matrice de performance
+        modeles_selectionnes (list): Liste des modèles analysés
+        modeles_valides (dict): Informations des modèles
+        modeles_similaires (list): Paires de modèles similaires
+        seuil_similarite (float): Seuil utilisé
+    """
+    print("\n" + "="*100)
+    print("RÉSULTATS DE L'ANALYSE DE SIMILARITÉ")
+    print("="*100)
+    
+    # 1. Tableau des performances croisées
+    print("\n📋 RÉSUMÉ DES PERFORMANCES CROISÉES")
+    print("-" * 50)
+    
+    # Préparation des données pour le tableau
+    table_data = []
+    for result in resultats_croises:
+        table_data.append([
+            result['Modèle'],
+            result['Testé sur'],
+            result['MAE (%)'],
+            result['Différence'],
+            result['Status'].replace('🏠 ', '').replace('✅ ', '').replace('🟢 ', '').replace('🟡 ', '').replace('🔴 ', '')
+        ])
+    
+    afficher_tableau_ascii(
+        table_data,
+        ['Modèle', 'Testé sur', 'MAE (%)', 'Différence', 'Status'],
+        "Performances Croisées Détaillées"
+    )
+    
+    # 2. Matrice de performance simplifiée
+    print("\n📊 MATRICE DE PERFORMANCE (MAE %)")
+    print("-" * 40)
+    
+    n_modeles = len(modeles_selectionnes)
+    
+    # En-têtes des colonnes (capteurs des données de test)
+    headers = ['Modèle \\ Données'] + [f"Données_{modeles_valides[modeles_selectionnes[i]]['capteur']}" for i in range(n_modeles)]
+    
+    # Données de la matrice
+    matrix_data = []
+    for i in range(n_modeles):
+        row = [f"Capteur_{modeles_valides[modeles_selectionnes[i]]['capteur']}"]
+        for j in range(n_modeles):
+            mae_val = matrice_mae[i, j]
+            if mae_val == np.inf:
+                row.append("N/A")
+            else:
+                row.append(f"{mae_val:.1f}")
+        matrix_data.append(row)
+    
+    afficher_tableau_ascii(matrix_data, headers)
+    
+    # 3. Analyse de similarité
+    print(f"\n🔗 ANALYSE DE REGROUPEMENT (Seuil: {seuil_similarite}% MAE)")
+    print("-" * 55)
+    
+    if modeles_similaires:
+        print(f"✅ {len(modeles_similaires)} paire(s) de modèles similaires trouvée(s):\n")
+        
+        for i, (idx_i, idx_j, diff) in enumerate(modeles_similaires, 1):
+            nom_i = modeles_selectionnes[idx_i]
+            nom_j = modeles_selectionnes[idx_j]
+            capteur_i = modeles_valides[nom_i]['capteur']
+            capteur_j = modeles_valides[nom_j]['capteur'] 
+            inter_i = modeles_valides[nom_i]['intersection']
+            inter_j = modeles_valides[nom_j]['intersection']
+            
+            print(f"   {i}. {capteur_i} ({inter_i}) ↔ {capteur_j} ({inter_j})")
+            print(f"      Différence moyenne: {diff:.2f}% MAE")
+            print()
+        
+        # Recommandations de consolidation
+        print("💡 RECOMMANDATIONS DE CONSOLIDATION:")
+        print("-" * 40)
+        
+        # Algorithme de regroupement
+        groupes = []
+        modeles_assignes = set()
+        
+        for i, j, diff in modeles_similaires:
+            if i not in modeles_assignes and j not in modeles_assignes:
+                groupes.append([i, j])
+                modeles_assignes.update([i, j])
+            elif i in modeles_assignes:
+                for groupe in groupes:
+                    if i in groupe and j not in modeles_assignes:
+                        groupe.append(j)
+                        modeles_assignes.add(j)
+                        break
+            elif j in modeles_assignes:
+                for groupe in groupes:
+                    if j in groupe and i not in modeles_assignes:
+                        groupe.append(i)
+                        modeles_assignes.add(i)
+                        break
+        
+        # Affichage des groupes
+        for idx, groupe in enumerate(groupes, 1):
+            print(f"\n   Groupe {idx} - Peut utiliser un modèle commun:")
+            for model_idx in groupe:
+                nom = modeles_selectionnes[model_idx]
+                capteur = modeles_valides[nom]['capteur']
+                intersection = modeles_valides[nom]['intersection']
+                mae_orig = modeles_valides[nom]['params']['mae_original']
+                print(f"     - {capteur} ({intersection}) - MAE original: {mae_orig}%")
+        
+        # Métriques de réduction
+        reduction_modeles = len(modeles_similaires)
+        reduction_pct = (reduction_modeles / len(modeles_selectionnes)) * 100
+        
+        print(f"\n📈 IMPACT DE LA CONSOLIDATION:")
+        print(f"   • Réduction possible: {reduction_modeles} modèles en moins")
+        print(f"   • Pourcentage de réduction: {reduction_pct:.1f}%")
+        
+    else:
+        print(f"❌ Aucun modèle similaire trouvé avec le seuil de {seuil_similarite}% MAE.")
+        print("\n💡 RECOMMANDATIONS:")
+        print("   • Tous les modèles semblent spécifiques à leur capteur")
+        print("   • Considérez d'assouplir le seuil de similarité si approprié")
+        print("   • Analysez les caractéristiques des capteurs pour identifier des groupes logiques")
+    
+    # 4. Détails des modèles
+    print(f"\n📋 DÉTAILS DES MODÈLES ANALYSÉS")
+    print("-" * 35)
+    
+    details_data = []
+    for i, nom_modele in enumerate(modeles_selectionnes):
+        info = modeles_valides[nom_modele]
+        details_data.append([
+            f"Modèle_{i+1}",
+            info['capteur'],
+            info['intersection'][:20] + ("..." if len(info['intersection']) > 20 else ""),
+            f"{info['params']['mae_original']}%",
+            info['params']['hidden_size'],
+            info['params']['num_layers'],
+            f"{info['params']['dropout']:.2f}",
+            info['params']['window_size']
+        ])
+    
+    afficher_tableau_ascii(
+        details_data,
+        ['Modèle', 'Capteur', 'Intersection', 'MAE Orig.', 'Hidden', 'Layers', 'Dropout', 'Window'],
+        "Spécifications Techniques des Modèles"
+    )
+
+def run_cli_analysis(args):
+    """
+    Lance l'analyse complète en mode CLI.
+    
+    Args:
+        args: Arguments de ligne de commande parsés
+    """
+    global CLI_MODE, VERBOSE_LEVEL
+    CLI_MODE = True
+    VERBOSE_LEVEL = 2 if args.verbose else (0 if args.quiet else 1)
+    
+    log_message("🧠 ANALYSE DE SIMILARITÉ DES MODÈLES LSTM - MODE CLI", 1)
+    log_message("=" * 60, 1)
+    
+    # Configuration
+    data_folder = args.data
+    models_folder = args.models
+    seuil_similarite = args.threshold
+    output_dir = args.output
+    
+    # Vérification des dossiers
+    if not os.path.exists(data_folder):
+        log_error(f"Dossier de données '{data_folder}' introuvable.")
+        sys.exit(1)
+    
+    if not os.path.exists(models_folder):
+        log_error(f"Dossier de modèles '{models_folder}' introuvable.")
+        sys.exit(1)
+    
+    # Détection du device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    log_info(f"Device utilisé: {device}")
+    
+    # Découverte des modèles
+    log_message("🔍 Découverte des modèles disponibles...", 1)
+    modeles_disponibles = glob.glob(os.path.join(models_folder, "*.pt"))
+    
+    if not modeles_disponibles:
+        log_error("Aucun modèle trouvé dans le dossier spécifié.")
+        sys.exit(1)
+    
+    log_info(f"Modèles trouvés: {len(modeles_disponibles)}")
+    
+    # Parsing des modèles
+    info_modeles = {}
+    intersections_necessaires = set()
+    capteurs_necessaires = {}
+    
+    for chemin in modeles_disponibles:
+        nom = os.path.basename(chemin)
+        params = parser_nom_modele(nom)
+        
+        if params:
+            capteur, intersection = extraire_capteur_intersection(params['capteur_inter'])
+            
+            info_modeles[nom] = {
+                'chemin': chemin,
+                'params': params,
+                'capteur': capteur,
+                'intersection': intersection,
+                'cle_feat': None
+            }
+            
+            intersections_necessaires.add(intersection)
+            if intersection not in capteurs_necessaires:
+                capteurs_necessaires[intersection] = set()
+            capteurs_necessaires[intersection].add(capteur)
+    
+    log_message(f"📊 Intersections identifiées: {list(intersections_necessaires)}", 2)
+    
+    # Chargement des données
+    log_message("📁 Chargement sélectif des données...", 1)
+    donnees = charger_donnees_selectif(data_folder, intersections_necessaires)
+    
+    if not donnees:
+        log_error("Aucune donnée chargée.")
+        sys.exit(1)
+    
+    # Création des caractéristiques
+    log_message("🔧 Création des caractéristiques LSTM...", 1)
+    feats = creer_caracteristiques_selectif(donnees, capteurs_necessaires)
+    log_success(f"Données chargées: {len(feats)} capteurs trouvés")
+    
+    # Matching modèles-données
+    for nom, info in info_modeles.items():
+        intersection = info['intersection']
+        capteur = info['capteur']
+        
+        for (inter, cap), _ in feats.items():
+            if intersection in inter and capteur == str(cap):
+                info_modeles[nom]['cle_feat'] = (inter, cap)
+                break
+    
+    modeles_valides = {k: v for k, v in info_modeles.items() if v['cle_feat'] is not None}
+    
+    if not modeles_valides:
+        log_error("Aucun modèle ne correspond aux données disponibles.")
+        sys.exit(1)
+    
+    log_info(f"Modèles valides trouvés: {len(modeles_valides)}")
+    
+    # Sélection interactive des modèles
+    modeles_selectionnes = selectionner_modeles_interactif(modeles_valides)
+    
+    if len(modeles_selectionnes) < 2:
+        log_error("Au moins 2 modèles sont nécessaires pour l'analyse.")
+        sys.exit(1)
+    
+    # Préparation des données de test
+    log_message("🔧 Préparation des données de test...", 1)
+    donnees_test = {}
+    
+    for nom_modele in modeles_selectionnes:
+        cle_feat = modeles_valides[nom_modele]['cle_feat']
+        if cle_feat not in feats:
+            log_error(f"Clé {cle_feat} introuvable dans feats")
+            continue
+            
+        df = feats[cle_feat]
+        log_message(f"📊 {nom_modele.split('_')[1]}: {len(df)} échantillons totaux", 2)
+        
+        # Division 80-20
+        split_idx = int(0.8 * len(df))
+        df_test = df.iloc[split_idx:]
+        
+        # Création des séquences
+        params = modeles_valides[nom_modele]['params']
+        X_test, y_test = creer_sequences(df_test, params['window_size'])
+        
+        if len(X_test) > 0:
+            donnees_test[nom_modele] = {
+                'X_test': X_test,
+                'y_test': y_test,
+                'mean_flow': df['flow'].mean(),
+                'params': params
+            }
+            log_message(f"✅ Données test préparées pour {nom_modele.split('_')[1]}", 2)
+        else:
+            log_error(f"Aucune séquence générée pour {nom_modele.split('_')[1]}")
+    
+    if len(donnees_test) < 2:
+        log_error("Pas assez de données de test valides pour l'analyse")
+        sys.exit(1)
+    
+    # Calcul de la matrice de performance
+    log_message("🔍 Calcul de la matrice de performance croisée...", 1)
+    
+    n_modeles = len(modeles_selectionnes)
+    matrice_mae = np.zeros((n_modeles, n_modeles))
+    
+    total_tests = n_modeles * n_modeles
+    test_count = 0
+    
+    for i, modele_a in enumerate(modeles_selectionnes):
+        for j, modele_b in enumerate(modeles_selectionnes):
+            test_count += 1
+            
+            if VERBOSE_LEVEL >= 2:
+                print(f"Progress: {test_count}/{total_tests} - Test: {modele_a.split('_')[1]} sur données de {modele_b.split('_')[1]}")
+            
+            if i == j:
+                matrice_mae[i, j] = modeles_valides[modele_a]['params']['mae_original']
+            else:
+                try:
+                    if modele_b not in donnees_test:
+                        matrice_mae[i, j] = np.inf
+                        continue
+                        
+                    data_b = donnees_test[modele_b]
+                    
+                    model = charger_modele(
+                        modeles_valides[modele_a]['chemin'],
+                        modeles_valides[modele_a]['params'],
+                        device
+                    )
+                    
+                    mae_pct, predictions = evaluer_modele(
+                        model, data_b['X_test'], data_b['y_test'], 
+                        device, data_b['mean_flow']
+                    )
+                    
+                    matrice_mae[i, j] = mae_pct
+                    
+                    del model
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    
+                except Exception as e:
+                    log_error(f"Erreur lors du test de {modele_a.split('_')[1]} sur {modele_b.split('_')[1]}: {e}")
+                    matrice_mae[i, j] = np.inf
+    
+    log_success("Analyse de similarité terminée!")
+    
+    # Génération des résultats
+    resultats_croises = []
+    for i, modele_a in enumerate(modeles_selectionnes):
+        for j, modele_b in enumerate(modeles_selectionnes):
+            capteur_a = modeles_valides[modele_a]['capteur']
+            capteur_b = modeles_valides[modele_b]['capteur']
+            mae_value = matrice_mae[i, j]
+            
+            if i == j:
+                status = "Natif"
+                diff = 0.0
+            else:
+                mae_native = matrice_mae[j, j]
+                diff = mae_value - mae_native
+                
+                if diff <= 5.0:
+                    status = "Excellent" if diff <= 2.0 else "Bon"
+                elif diff <= 10.0:
+                    status = "Moyen"
+                else:
+                    status = "Faible"
+            
+            resultats_croises.append({
+                'Modèle': f"Capteur {capteur_a}",
+                'Testé sur': f"Capteur {capteur_b}",
+                'MAE (%)': f"{mae_value:.2f}",
+                'Différence': f"{diff:+.2f}%" if i != j else "0.00%",
+                'Status': status
+            })
+    
+    # Calcul de la similarité
+    matrice_diff = np.zeros((n_modeles, n_modeles))
+    for i in range(n_modeles):
+        for j in range(n_modeles):
+            if i != j:
+                mae_native = matrice_mae[j, j]
+                mae_croisee = matrice_mae[i, j]
+                diff_relative = abs(mae_croisee - mae_native)
+                matrice_diff[i, j] = diff_relative
+    
+    modeles_similaires = []
+    for i in range(n_modeles):
+        for j in range(i + 1, n_modeles):
+            diff_ij = matrice_diff[i, j]
+            diff_ji = matrice_diff[j, i]
+            diff_moyenne = (diff_ij + diff_ji) / 2
+            
+            if diff_moyenne <= seuil_similarite:
+                modeles_similaires.append((i, j, diff_moyenne))
+    
+    # Affichage des résultats
+    afficher_resultats_cli(resultats_croises, matrice_mae, modeles_selectionnes, 
+                          modeles_valides, modeles_similaires, seuil_similarite)
+    
+    # Sauvegarde des résultats
+    if output_dir:
+        log_message(f"💾 Sauvegarde des résultats dans {output_dir}...", 1)
+        timestamp = sauvegarder_resultats_cli(
+            output_dir, resultats_croises, matrice_mae, modeles_selectionnes,
+            modeles_valides, modeles_similaires, seuil_similarite
+        )
+        
+        # Sauvegarde des visualisations
+        log_message("🎨 Génération des visualisations...", 1)
+        sauvegarder_visualisations_cli(
+            output_dir, timestamp, matrice_mae, modeles_selectionnes, modeles_valides
+        )
+        
+        log_success(f"Tous les résultats ont été sauvegardés dans {output_dir}/")
+    
+    log_message("\n🎉 Analyse terminée avec succès!", 1)
+
+# =============================================================================
+# FONCTION PRINCIPALE STREAMLIT (MODE GUI)
+# =============================================================================
+
+def main_streamlit():
+    """
+    Fonction principale de l'application Streamlit (mode GUI).
+    """
+    # Configuration de la page Streamlit avec titre, icône et layout
+    st.set_page_config(
+        page_title="Analyse de Similarité des Modèles LSTM",
+        page_icon="🧠",
+        layout="wide"
+    )
     
     st.title("🧠 Analyse de Similarité des Modèles LSTM")
     st.markdown("---")
@@ -424,10 +1155,6 @@ def main():
     if not os.path.exists(data_folder) or not os.path.exists(models_folder):
         st.error("Veuillez vérifier les chemins des dossiers de données et de modèles.")
         return
-    
-    # =============================================================================
-    # DÉCOUVERTE ET PARSING DES MODÈLES DISPONIBLES
-    # =============================================================================
     
     # Chargement de la liste des modèles disponibles
     modeles_disponibles = glob.glob(os.path.join(models_folder, "*.pt"))
@@ -470,10 +1197,6 @@ def main():
     for inter, caps in capteurs_necessaires.items():
         st.write(f"- {inter}: capteurs {list(caps)}")
     
-    # =============================================================================
-    # CHARGEMENT SÉLECTIF DES DONNÉES
-    # =============================================================================
-    
     # Chargement optimisé: uniquement les intersections et capteurs nécessaires
     with st.spinner("Chargement sélectif des données..."):
         donnees = charger_donnees_selectif(data_folder, intersections_necessaires)
@@ -484,10 +1207,6 @@ def main():
         # Création des caractéristiques pour les modèles LSTM
         feats = creer_caracteristiques_selectif(donnees, capteurs_necessaires)
         st.success(f"Données chargées: {len(feats)} capteurs trouvés")
-    
-    # =============================================================================
-    # MATCHING MODÈLES-DONNÉES
-    # =============================================================================
     
     # Association de chaque modèle avec ses données correspondantes
     for nom, info in info_modeles.items():
@@ -509,10 +1228,7 @@ def main():
     
     st.info(f"Modèles valides trouvés: {len(modeles_valides)}")
     
-    # =============================================================================
-    # SÉLECTION DES MODÈLES À ANALYSER
-    # =============================================================================
-    
+    # Sélection des modèles à analyser
     st.header("Sélection des Modèles à Analyser")
     
     noms_modeles = list(modeles_valides.keys())
@@ -527,16 +1243,10 @@ def main():
         st.warning("Veuillez sélectionner au moins 2 modèles pour l'analyse.")
         return
     
-    # =============================================================================
-    # ANALYSE DE SIMILARITÉ PRINCIPALE
-    # =============================================================================
-    
+    # Analyse de similarité principale
     if st.button("🔍 Lancer l'Analyse de Similarité"):
         
-        # =========================================================================
-        # PRÉPARATION DES DONNÉES DE TEST
-        # =========================================================================
-        
+        # Préparation des données de test
         donnees_test = {}
         st.write("🔧 Préparation des données de test...")
         
@@ -579,10 +1289,7 @@ def main():
             st.error("Pas assez de données de test valides pour l'analyse")
             return
         
-        # =========================================================================
-        # CALCUL DE LA MATRICE DE PERFORMANCE CROISÉE
-        # =========================================================================
-        
+        # Calcul de la matrice de performance croisée
         st.header("📊 Matrice de Similarité")
         
         n_modeles = len(modeles_selectionnes)
@@ -642,10 +1349,7 @@ def main():
         progress_bar.empty()
         status_text.empty()
         
-        # =========================================================================
-        # AFFICHAGE DES RÉSULTATS DE PERFORMANCE
-        # =========================================================================
-        
+        # Affichage des résultats de performance
         st.success("🎯 Analyse de similarité terminée !")
         
         # Tableau récapitulatif des performances croisées
@@ -688,10 +1392,7 @@ def main():
         df_resultats = pd.DataFrame(resultats_croises)
         st.dataframe(df_resultats, use_container_width=True, hide_index=True)
         
-        # =========================================================================
-        # VISUALISATION DE LA MATRICE DE PERFORMANCE
-        # =========================================================================
-        
+        # Visualisation de la matrice de performance
         # Création d'une heatmap interactive avec Plotly
         df_matrice = pd.DataFrame(
             matrice_mae,
@@ -714,10 +1415,7 @@ def main():
         
         st.plotly_chart(fig_heatmap, use_container_width=True)
         
-        # =========================================================================
-        # ANALYSE DE SIMILARITÉ ET CLUSTERING
-        # =========================================================================
-        
+        # Analyse de similarité et clustering
         st.header("🔗 Analyse de Regroupement")
         
         # Calcul des différences relatives entre performances croisées et natives
@@ -743,10 +1441,7 @@ def main():
                 if diff_moyenne <= seuil_similarite:
                     modeles_similaires.append((i, j, diff_moyenne))
         
-        # =========================================================================
-        # AFFICHAGE DES MODÈLES SIMILAIRES
-        # =========================================================================
-        
+        # Affichage des modèles similaires
         if modeles_similaires:
             st.success(f"🎯 Modèles similaires trouvés (seuil: {seuil_similarite}% MAE):")
             
@@ -790,10 +1485,7 @@ def main():
         else:
             st.warning(f"Aucun modèle similaire trouvé avec le seuil de {seuil_similarite}% MAE.")
         
-        # =========================================================================
-        # GÉNÉRATION DES RECOMMANDATIONS
-        # =========================================================================
-        
+        # Génération des recommandations
         st.header("💡 Recommandations")
         
         if modeles_similaires:
@@ -846,10 +1538,7 @@ def main():
             st.write("- Considérez d'assouplir le seuil de similarité si approprié")
             st.write("- Analysez les caractéristiques des capteurs pour identifier des groupes logiques")
         
-        # =========================================================================
-        # TABLEAU DÉTAILLÉ DES RÉSULTATS
-        # =========================================================================
-        
+        # Tableau détaillé des résultats
         st.header("📋 Résultats Détaillés")
         
         # Compilation des informations détaillées de chaque modèle
@@ -870,6 +1559,115 @@ def main():
         # Affichage du tableau récapitulatif
         df_details = pd.DataFrame(resultats_details)
         st.dataframe(df_details, use_container_width=True)
+
+# =============================================================================
+# FONCTION PRINCIPALE ET PARSING DES ARGUMENTS
+# =============================================================================
+
+def main():
+    """
+    Point d'entrée principal de l'application.
+    Gère le choix entre mode CLI et mode GUI.
+    """
+    parser = argparse.ArgumentParser(
+        description="Analyse de similarité des modèles LSTM pour capteurs de trafic",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Exemples d'utilisation:
+
+  Mode GUI (Streamlit):
+    python analyse_similarite_lstm.py
+
+  Mode CLI:
+    python analyse_similarite_lstm.py --cli --data ./data --models ./models
+    
+  Mode CLI avec options:
+    python analyse_similarite_lstm.py --cli --data ./data --models ./models \\
+                                      --threshold 3.0 --output ./resultats --verbose
+
+  Mode CLI silencieux:
+    python analyse_similarite_lstm.py --cli --data ./data --models ./models --quiet
+        """
+    )
+    
+    # Arguments principaux
+    parser.add_argument(
+        '--cli', 
+        action='store_true',
+        help='Lance l\'application en mode ligne de commande (CLI) au lieu du mode GUI Streamlit'
+    )
+    
+    # Arguments pour le mode CLI
+    cli_group = parser.add_argument_group('Options CLI')
+    
+    cli_group.add_argument(
+        '--data', 
+        type=str, 
+        default='./data',
+        help='Dossier contenant les données CSV des capteurs (défaut: ./data)'
+    )
+    
+    cli_group.add_argument(
+        '--models', 
+        type=str, 
+        default='./models',
+        help='Dossier contenant les modèles LSTM (.pt) (défaut: ./models)'
+    )
+    
+    cli_group.add_argument(
+        '--threshold', 
+        type=float, 
+        default=5.0,
+        help='Seuil de différence MAE acceptable pour considérer deux modèles comme similaires (défaut: 5.0%%)'
+    )
+    
+    cli_group.add_argument(
+        '--output', 
+        type=str, 
+        default='./resultats',
+        help='Dossier de sortie pour les résultats CSV et PNG (défaut: ./resultats)'
+    )
+    
+    # Options de verbosité
+    verbosity_group = parser.add_mutually_exclusive_group()
+    verbosity_group.add_argument(
+        '--verbose', '-v',
+        action='store_true',
+        help='Mode verbeux: affiche plus d\'informations de débogage'
+    )
+    
+    verbosity_group.add_argument(
+        '--quiet', '-q',
+        action='store_true', 
+        help='Mode silencieux: affiche seulement les erreurs'
+    )
+    
+    # Parsing des arguments
+    args = parser.parse_args()
+    
+    # Vérification des dépendances selon le mode choisi
+    if args.cli:
+        # Mode CLI: vérifier tabulate
+        try:
+            import tabulate
+        except ImportError:
+            print("ERREUR: Le module 'tabulate' est requis pour le mode CLI.", file=sys.stderr)
+            print("Installez-le avec: pip install tabulate", file=sys.stderr)
+            sys.exit(1)
+        
+        # Lancement de l'analyse CLI
+        run_cli_analysis(args)
+        
+    else:
+        # Mode GUI: vérifier Streamlit
+        if not STREAMLIT_AVAILABLE:
+            print("ERREUR: Streamlit n'est pas installé.", file=sys.stderr)
+            print("Installez-le avec: pip install streamlit", file=sys.stderr)
+            print("Ou utilisez le mode CLI avec --cli", file=sys.stderr)
+            sys.exit(1)
+        
+        # Lancement de l'interface Streamlit
+        main_streamlit()
 
 # =============================================================================
 # POINT D'ENTRÉE DE L'APPLICATION

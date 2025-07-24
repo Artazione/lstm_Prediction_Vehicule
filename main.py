@@ -48,13 +48,15 @@ COMPONENTS = {
         'description': 'Entraînement et évaluation de modèles LSTM',
         'requirements': ['torch', 'sklearn'],
         'optional_requirements': ['streamlit', 'matplotlib', 'tabulate'],
-        'gui_available': True
+        'gui_available': True,
+        'streamlit_app': True  # Indique que c'est une app Streamlit
     },
     'similarity': {
         'script': 'analyse_similarite_lstm.py',
         'description': 'Analyse de similarité entre modèles LSTM',
         'requirements': ['streamlit', 'torch', 'plotly', 'sklearn'],
-        'gui_available': True
+        'gui_available': True,
+        'streamlit_app': True  # Indique que c'est une app Streamlit
     }
 }
 
@@ -242,11 +244,25 @@ def run_component(component_name, args):
     if optional_missing:
         print(f"⚠️  Fonctionnalités limitées (dépendances optionnelles manquantes): {', '.join(optional_missing)}")
     
-    # Construction de la commande
-    cmd = [sys.executable, script_path] + args
+    # Gestion spéciale pour les applications Streamlit en mode GUI
+    if component.get('streamlit_app', False) and not any('--cli' in arg for arg in args):
+        # Vérifier que streamlit est disponible
+        if not check_dependency('streamlit'):
+            print(f"❌ Streamlit requis pour le mode GUI de {component_name}")
+            print("Installation: pip install streamlit")
+            return False
+        
+        # Lancement via streamlit run pour le mode GUI
+        cmd = ['streamlit', 'run', script_path] + args
+        print(f"🚀 Lancement de {component_name} (Interface Streamlit)...")
+        print(f"Commande: {' '.join(cmd)}")
+        print("📡 L'interface web va s'ouvrir dans votre navigateur...")
+    else:
+        # Lancement Python standard pour CLI ou scripts non-Streamlit
+        cmd = [sys.executable, script_path] + args
+        print(f"🚀 Lancement de {component_name}...")
+        print(f"Commande: {' '.join(cmd)}")
     
-    print(f"🚀 Lancement de {component_name}...")
-    print(f"Commande: {' '.join(cmd)}")
     print("-" * 50)
     
     try:
@@ -306,6 +322,7 @@ Exemples d'utilisation:
   python main.py --component tuning --data ./data --trials 50
   python main.py --component lstm --cli --data ./data --output ./results
   python main.py --component similarity
+  python main.py --component similarity --cli --data ./data --models ./models
   
   # Statut et aide
   python main.py --status
@@ -382,8 +399,10 @@ Exemples d'utilisation:
             print("       Options: --verbose, --quiet")
             
         elif selected_component == 'similarity':
-            print("Mode GUI uniquement (interface Streamlit)")
-            print("Aucun argument supplémentaire requis.")
+            print("Modes disponibles:")
+            print("  GUI: (pas d'arguments supplémentaires - lance Streamlit)")
+            print("  CLI: --cli --data <dossier> --models <dossier> --output <dossier>")
+            print("       Options: --threshold <seuil>, --verbose, --quiet")
         
         additional_args = input("\nArguments supplémentaires (ou Entrée pour défaut): ").strip()
         
